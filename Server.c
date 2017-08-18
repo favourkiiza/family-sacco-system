@@ -16,7 +16,7 @@ int total_contributions = 0;
 MYSQL *connection;
 MYSQL_RES *result;
 MYSQL_ROW row;
-char help[]=">contribution amount date person_name - To submit a contribution\n>contribution check - See how much has been contributed\n>benefits check - Know how much has been received in benefits only\n>loan request amount - Request a loan\n>loan status - check loan status\n>loan repayment_details - Check the loan repayment details\n>repay loan amount\n>idea name capital \"simpledescription\" - Submit a business idea\n>logout - Logout of the system";
+char help[]=">contribution person_name amount date receipt_number- To submit a contribution\n>contribution check - See how much has been contributed\n>benefits check - Know how much has been received in benefits only\n>loan_request person_name amount date - Request a loan\n>loan status - check loan status\n>loan repayment_details - Check the loan repayment details\n>repay loan amount\n>idea  person_name   idea_name capital \"simpledescription\" - Submit a business idea\n>logout - Logout of the system";
 
 //FUNCTION TO SPLIT A STRING OF CHARACTERS USING A SPECIFIED DELIMITER     
 char** stringSplit(char* command_to_split, const char delimeter)
@@ -71,7 +71,7 @@ void connectToMysql()
     char *server = "localhost";
     char *user = "root";
     char *password = "123456";
-    char *database = "recess";
+    char *database = "familysacco";
 
     connection = mysql_init(NULL);
 
@@ -83,6 +83,7 @@ void connectToMysql()
    }
    
 }
+
 
 /* THIS FUNCTION WRITES THE DATA TO FILE */
 void writeToFile(char command_to_save[100], int memberID1)
@@ -96,7 +97,7 @@ void writeToFile(char command_to_save[100], int memberID1)
         puts("File not found");
     }
 
-    fprintf(pt, "%s#%d\n", command_to_save,memberID1);
+    fprintf(pt, "%s %d\n", command_to_save,memberID1);
     
     fclose(pt);
 }
@@ -106,13 +107,13 @@ void closeMysqlConn(){
    mysql_free_result(result);
    mysql_close(connection);
 }
-
+/* THIS IS THE LOGIN FUNCTION*/
 int login(char uname1[50], char user_password1[50])
 {
     int value = 0;
     char sqlquery[1024];
     connectToMysql();
-    sprintf(sqlquery, "select * from member where name = '%s' and password = '%s'",uname1,user_password1);
+    sprintf(sqlquery, "select * from members where username = '%s' and password = '%s'",uname1,user_password1);
    /* send SQL query */
    if (mysql_query(connection, sqlquery)) {
       fprintf(stderr, "%s\n", mysql_error(connection));
@@ -135,7 +136,7 @@ int getMemberID(char uname1[50], char user_password1[50])
     int memberID;
     char sqlquery[1024];
     connectToMysql();
-    sprintf(sqlquery, "select * from member where name = '%s' and password = '%s'",uname1,user_password1);
+    sprintf(sqlquery, "select * from members where username = '%s' and password = '%s'",uname1,user_password1);
    /* send SQL query */
    if (mysql_query(connection, sqlquery)) {
       fprintf(stderr, "%s\n", mysql_error(connection));
@@ -270,7 +271,7 @@ int loanRepayment(int amount, int id){
 
     connectToMysql();
     
-    sprintf(sqlquery3, "select * from member where loan = %d",id);
+    sprintf(sqlquery3, "select * from members where loan_ = %d",id);
     
     if (mysql_query(connection, sqlquery3))
     {
@@ -395,23 +396,8 @@ void *connection_handler(void *socket_desc)
                             }                
                         break;
                 
-                        case 3:
-                            if (strcmp(*client_command_tokens , "loan") == 0 && strcmp(*(client_command_tokens+1) , "request") == 0)
-                            {
-                                writeToFile(client_command_temp,memberID); 
-                                total_contributions = findTotalContribution();  
-
-                                if (atoi(*(client_command_tokens+2)) <= total_contributions/2)
-                                {
-                                    loanRequest(memberID,atoi(*(client_command_tokens+2)));
-                                    char msg6[50] = "Loan request Submited";
-                                    send(sock , msg6 , strlen(msg6) , 0);
-                                }
-                                else{
-                                    char msg7[50] = "Loan request Rejected";
-                                    send(sock , msg7 , strlen(msg7) , 0);
-                                }                    
-                            }else if (strcmp(*client_command_tokens , "repay") == 0 && strcmp(*(client_command_tokens+1) , "loan") == 0)
+                        case 3:                   
+                             if (strcmp(*client_command_tokens , "repay") == 0 && strcmp(*(client_command_tokens+1) , "loan") == 0)
                             {
                             	writeToFile(client_command_temp, memberID);
                             	loanRepayment(memberID,atoi(*client_command_tokens+2));
@@ -422,7 +408,36 @@ void *connection_handler(void *socket_desc)
                         break;
 
                         case 4:
-                            if (strcmp(*client_command_tokens , "idea") == 0)
+
+                            if (strcmp(*client_command_tokens , "loan_request") == 0 )
+                            {
+                                writeToFile(client_command_temp,memberID); 
+                                //writeToFileLoan(client_command_temp,uname,memberID);
+                                total_contributions = findTotalContribution();  
+
+                                if (atoi(*(client_command_tokens+2)) <= total_contributions/2)
+                                {
+                                    loanRequest(memberID,atoi(*(client_command_tokens+2)));
+                                    char msg6[50] = "Loan request Submited";
+                                    send(sock , msg6 , strlen(msg6) , 0);
+                                }
+                                else{
+                                    char msg7[50] = "Loan request Submited";
+                                    send(sock , msg7 , strlen(msg7) , 0);
+                                } 
+                            }
+                        break;
+
+                        case 5:
+                            if (strcmp(*client_command_tokens , "contribution") == 0)
+                            {
+                                writeToFile(client_command_temp,memberID);
+                                char msg9[500] = "Contribution received, please take the hard copy of the receipt to the admin for approval";
+                                send(sock , msg9 , strlen(msg9) , 0);
+
+                                //send(sock, msg11, strlen(msg11), 0);
+                            }
+                            else if (strcmp(*client_command_tokens , "idea") == 0)
                             {
                                 total_contributions = findTotalContribution();
                                 
@@ -436,17 +451,6 @@ void *connection_handler(void *socket_desc)
                                 }
                                 writeToFile(client_command_temp,memberID);
                                 
-                            }else{
-                                send(sock, msg11, strlen(msg11), 0);
-                            }
-                        break;
-
-                        case 5:
-                            if (strcmp(*client_command_tokens , "contribution") == 0)
-                            {
-                                writeToFile(client_command_temp,memberID);
-                                char msg9[500] = "Contribution received, please take the hard copy of the receipt to the admin for approval";
-                                send(sock , msg9 , strlen(msg9) , 0);
                             }else{
                                 send(sock, msg11, strlen(msg11), 0);
                             }                       
@@ -491,7 +495,7 @@ int main(int argc , char *argv[])
     //Prepare the sockaddr_in structure
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons( 1116);
+    server.sin_port = htons( 1118);
      
     //Bind
     bind1 = bind(socket_desc,(struct sockaddr *)&server , sizeof(server));
